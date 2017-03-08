@@ -1,0 +1,1682 @@
+#!/usr/bin/env node
+
+'use strict';
+
+const Program = require('commander');
+const Spawn = require('child_process').spawn;
+const Prompt = require('prompt');
+const Sqlite3 = require('sqlite3').verbose();
+const Wreck = require('wreck');
+const Items = require('items');
+const Fs = require('fs');
+
+const DoggoNative = require('doggo')('native');
+
+const CopyPaste = require('copy-paste');
+
+const internals = {};
+
+internals.getDb = () => {
+
+    return new Promise((resolve) => {
+
+        const Db = new Sqlite3.Database(__dirname + '/doggo.sqlite');
+
+        Db.serialize(() => {
+
+            Db.run(`CREATE TABLE IF NOT EXISTS Settings (
+                id INTEGER,
+                defaultuser TEXT,
+                defaultremote TEXT,
+                keepunlocked INTEGER,
+                CONSTRAINT id_unique UNIQUE (id)
+            )`);
+
+            Db.run(`CREATE TABLE IF NOT EXISTS Remotes (
+                name TEXT,
+                url TEXT,
+                CONSTRAINT name_unique UNIQUE (name)
+            )`);
+
+            Db.run(`CREATE TABLE IF NOT EXISTS Users (
+                email TEXT,
+                username TEXT,
+                fingerprint TEXT,
+                publicKey TEXT,
+                password TEXT,
+                jwt TEXT,
+                CONSTRAINT email_unique UNIQUE (email),
+                CONSTRAINT name_unique UNIQUE (username)
+            )`);
+
+            // Join table
+            Db.run(`CREATE TABLE IF NOT EXISTS RemotesUsers (
+                username TEXT,
+                remotename TEXT
+            )`);
+
+            Db.get('SELECT * FROM Settings WHERE id = ?', 1, (err, rows) => {
+
+                if (err) {
+                    return console.log(err);
+                }
+                if (!rows) {
+                    Db.serialize(() => {
+
+                        Db.run('INSERT INTO Settings(id,defaultuser,keepunlocked) VALUES(?,?,?)', [1, null, 1], (err) => {
+
+                            if (err) {
+                                return console.log(err);
+                            }
+                            resolve(Db);
+                        });
+                    });
+                }
+                else {
+                    return resolve(Db);
+                }
+            });
+        });
+    });
+};
+
+internals.listTable = (db, tableName, cb) => {
+
+    db.all('SELECT * FROM ' + tableName, (err, rows) => {
+
+        if (err) {
+            return console.log(err);
+        }
+        if (rows.length === 0) {
+            return console.log('No entries in table ' + tableName);
+        }
+
+        if (typeof cb === 'function') {
+            return cb(err, rows);
+        }
+        return console.log(rows);
+    });
+};
+
+internals.getSettings = (Db, cb) => {
+
+    return new Promise((resolve, reject) => {
+
+
+        Db.get('SELECT * FROM Settings WHERE id = ?', 1, (err, settings) => {
+
+            if (typeof cb === 'function') {
+                cb(err, settings);
+            }
+
+            if (err) {
+                return reject(err);
+            }
+            return resolve(settings);
+        });
+    });
+};
+
+internals.checkExists = (Db, tableName, columnName, existItem, cb) => {
+
+    return new Promise((resolve, reject) => {
+
+        Db.get('SELECT * FROM ' + tableName + ' WHERE ' + columnName + ' = ?', existItem, (err, item) => {
+
+            if (typeof cb === 'function') {
+                cb(err, item);
+            }
+
+            if (err) {
+                return reject(err);
+            }
+
+            return resolve(item);
+        });
+    });
+};
+
+internals.remoteRequest = (remote, route, requestPayload, cb) => {
+
+    return new Promise((resolve, reject) => {
+
+        if (route.indexOf('/doggo') === -1) {
+
+            const errMsg = 'Doggo routes need to be prefixed with "/doggo"';
+
+            if (typeof cb === 'function') {
+                cb(errMsg);
+            }
+            return reject(errMsg);
+        }
+
+        Wreck.post(`${remote.url}${route}`, {
+            payload: requestPayload
+        }, (err, res, payload) => {
+
+            if (err) {
+                if (typeof cb === 'function') {
+                    cb(err);
+                }
+                return reject(err);
+            }
+
+            if (typeof cb === 'function') {
+                cb(null, payload);
+                return resolve(payload);
+            }
+        });
+    });
+};
+
+internals.remoteAuthRequest = (user, remote, route, requestPayload, cb) => {
+
+    return new Promise((resolve, reject) => {
+
+        if (route.indexOf('/doggo') === -1) {
+
+            const errMsg = 'Doggo routes need to be prefixed with "/doggo"';
+
+            if (typeof cb === 'function') {
+                cb(errMsg);
+            }
+            return reject(errMsg);
+        }
+
+        Wreck.post(`${remote.url}${route}`, {
+            headers: {
+                authorization: user.jwt
+            },
+            payload: requestPayload
+        }, (err, res, payload) => {
+
+            if (err) {
+                if (typeof cb === 'function') {
+                    cb(err);
+                }
+                return reject(err);
+            }
+
+            if (typeof cb === 'function') {
+                cb(null, payload);
+            }
+            return resolve(payload);
+        });
+    });
+};
+
+internals.loginUserToRemoteWithObjects = (loginRemote, loginUser, cb) => {
+
+    return new Promise((resolve, reject) => {
+
+        Prompt.get({
+            properties: {
+                remotePassword: {
+                    hidden: true,
+                    description: 'Remote password'
+                }
+            }
+        }, (err, promptRes) => {
+
+            if (err) {
+                if (typeof cb === 'function') {
+                    cb(err);
+                }
+                return reject(err);
+            }
+
+            Wreck.post(`${loginRemote.url}/login`, {
+                payload: {
+                    email: loginUser.email,
+                    password: promptRes.remotePassword
+                }
+            }, (err, res, loginPayload) => {
+
+                if (err) {
+                    return console.log(err);
+                }
+
+                if (Buffer.isBuffer(loginPayload)) {
+                    loginPayload = loginPayload.toString('utf8');
+                }
+
+                try {
+                    loginPayload = JSON.parse(loginPayload);
+                }
+                catch (err) {}
+
+                if (loginPayload.error) {
+                    if (typeof cb === 'function') {
+                        cb(loginPayload);
+                    }
+                    return reject(loginPayload);
+                }
+
+                Db.run('INSERT INTO RemotesUsers(username,remotename) VALUES(?,?)',[
+                    loginUser.username,
+                    loginRemote.name
+                ], (err) => {
+
+                    if (err) {
+                        if (typeof cb === 'function') {
+                            cb(err);
+                        }
+                        return reject(err);
+                    }
+
+                    Db.run('UPDATE Users SET jwt = ? WHERE username = ?', [loginPayload, loginUser.username], (err) => {
+
+                        if (err) {
+                            cb(err);
+                            return reject(err);
+                        }
+                        console.log(`Success. User ${loginUser.username} logged into remote ${loginRemote.name}`);
+
+                        if (typeof cb === 'function') {
+                            cb(null, loginPayload);
+                        }
+
+                        return resolve(loginPayload);
+                    });
+                });
+            });
+        });
+    });
+};
+
+internals.loginUserToRemote = (Db, remoteName, username, cb) => {
+
+    return new Promise((resolve, reject) => {
+
+        internals.checkExists(Db, 'Remotes', 'name', remoteName)
+        .then((foundRemote) => {
+
+            internals.checkExists(Db, 'Users', 'username', username)
+            .then((foundUser) => {
+
+                internals.loginUserToRemoteWithObjects(foundRemote, foundUser).
+                then((loginPayload) => {
+
+                    if (typeof cb === 'function') {
+                        cb(null, loginPayload);
+                    }
+                    resolve(loginPayload);
+                })
+                .catch((err) => {
+
+                    if (typeof cb === 'function') {
+                        cb(err);
+                    }
+                    reject(err);
+                });
+            });
+        });
+    });
+};
+
+Program
+    .version('0.0.1')
+    .description('A cli for creating and sharing secure passwords, texts, and files');
+
+Program
+    .command('meme')
+    .description('Gimme Doggo memes!')
+    .action(() => {
+
+        Spawn('open', ['https://www.facebook.com/pg/borkINC/posts']);
+    });
+
+Program
+    .command('remote [cmd] [params...]')
+    .description('Work with remotes')
+    .action((cmd, params) => {
+
+        internals.getDb()
+        .then((Db) => {
+
+            switch (cmd) {
+
+                case 'ls':
+
+                    internals.listTable(Db, 'Remotes');
+                    break;
+
+                case 'add':
+
+                    if (params.length !== 2) {
+                        return console.log('--help doggo remote add <name> <url>');
+                    }
+
+                    Db.run('INSERT INTO Remotes(name,url) VALUES(?,?)', params, (err) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+
+                        internals.listTable(Db, 'Remotes', (err, rows) => {
+
+                            if (err) {
+                                return console.log(err);
+                            }
+
+                            if (rows.length === 1) {
+                                Db.run('UPDATE Settings SET defaultremote = ? WHERE id = ?', [params[0], 1], (err) => {
+
+                                    if (err) {
+                                        return console.log(err);
+                                    }
+
+                                    console.log('Default remote set to ' + params[0]);
+
+                                    Db.get('SELECT * FROM Settings WHERE id = ?', 1, (err, settings) => {
+
+                                        if (err) {
+                                            return console.log(err);
+                                        }
+                                        return console.log(`Current settings: ${JSON.stringify(settings, undefined, 4)}`);
+                                    });
+                                });
+                            }
+                            else {
+                                return console.log('Success');
+                            }
+                        });
+                    });
+                    break;
+
+                case 'get-url':
+
+                    if (params.length !== 1) {
+                        return console.log('--help doggo remote get-url <name>');
+                    }
+
+                    Db.get('SELECT url FROM Remotes WHERE name = ?', params, (err, row) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+                        if (!row) {
+                            return console.log(`Remote ${params[0]} not found`);
+                        }
+                        return console.log(row.url);
+                    });
+                    break;
+
+                case 'set-url':
+
+                    if (params.length !== 2) {
+                        return console.log('--help doggo remote set-url <name> <url>');
+                    }
+
+                    Db.run('UPDATE Remotes SET url = ? WHERE name = ?', [params[1], params[0]], (err) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+                        return console.log('Success');
+                    });
+                    break;
+
+                case 'set-default':
+
+                    if (params.length !== 1) {
+                        return console.log('--help doggo remote set-default <remoteName>');
+                    }
+
+                    Db.get('SELECT * FROM Remotes WHERE name = ?', params, (err, row) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+                        if (!row) {
+                            return console.log(`Remote ${params[0]} not found`);
+                        }
+
+                        Db.run('UPDATE Settings SET defaultremote = ? WHERE id = ?', [row.name, 1], (err) => {
+
+                            if (err) {
+                                return console.log(err);
+                            }
+
+                            console.log('Default remote set to ' + row.name);
+
+                            internals.getSettings(Db)
+                            .then((settings) => {
+
+                                return console.log(`Current settings: ${JSON.stringify(settings, undefined, 4)}`);
+                            });
+                        });
+                    });
+                    break;
+
+                case 'unlink':
+
+                    if (params.length !== 2) {
+                        return console.log('--help doggo remote unlink-user <remoteName> <username>');
+                    }
+
+                    Db.run('DELETE FROM RemotesUsers WHERE username = ? AND remotename = ?', [params[1], params[0]], (err, rows) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+
+                        return console.log(`Deleted link with ${params[1]} and ${params[0]}`);
+                    });
+                    break;
+
+                case 'link':
+                case 'link-user':
+
+                    if (params.length !== 2) {
+                        return console.log('--help doggo remote link-user <remoteName> <username|email>');
+                    }
+
+                    Db.get('SELECT * FROM Users WHERE username = ? OR email = ?', [params[1], params[1]], (err, user) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+
+                        Db.get('SELECT * FROM Remotes WHERE name = ?', params[0], (err, remote) => {
+
+                            if (err) {
+                                return console.log(err);
+                            }
+
+                            Prompt.start();
+
+                            console.log('\nSetting up remote login\n');
+
+                            Prompt.get({
+                                properties: {
+                                    remotePassword: {
+                                        hidden: true,
+                                        description: 'Enter remote password'
+                                    }
+                                }
+                            }, (err, promptRes) => {
+
+                                if (err) {
+                                    return console.log(err);
+                                }
+
+                                Wreck.post(`${remote.url}/doggo/users`, {
+                                    payload: {
+                                        email: user.email,
+                                        password: promptRes.remotePassword,
+                                        firstName: user.username,
+                                        publicKey: user.publicKey
+                                    }
+                                }, (err, res, payload) => {
+
+                                    try {
+                                        payload = JSON.parse(payload.toString('utf8'));
+                                    }
+                                    catch (err) {}
+
+                                    if (err) {
+                                        return console.log(err);
+                                    }
+
+                                    if (payload.message && payload.message.indexOf('Unique email error:') > -1) {
+                                        console.log('User already exists on remote. Trying login.');
+                                    }
+
+                                    Wreck.post(`${remote.url}/doggo/login`, {
+                                        payload: {
+                                            email: user.email,
+                                            password: promptRes.remotePassword
+                                        }
+                                    }, (err, res, loginPayload) => {
+
+                                        if (err) {
+                                            return console.log(err);
+                                        }
+
+                                        if (Buffer.isBuffer(loginPayload)) {
+                                            loginPayload = loginPayload.toString('utf8');
+                                        }
+
+                                        try {
+                                            loginPayload = JSON.parse(loginPayload);
+                                        }
+                                        catch (err) {}
+
+                                        if (loginPayload.error) {
+                                            return console.log(loginPayload);
+                                        }
+
+                                        Db.run('INSERT INTO RemotesUsers(username,remotename) VALUES(?,?)',[
+                                            user.username,
+                                            remote.name
+                                        ], (err) => {
+
+                                            if (err) {
+                                                return console.log(err);
+                                            }
+
+                                            Db.run('UPDATE Users SET jwt = ? WHERE username = ?', [loginPayload, user.username], (err) => {
+
+                                                if (err) {
+                                                    return console.log(err);
+                                                }
+                                                console.log(`Success. User ${user.username} linked with remote ${remote.name}`);
+                                            });
+                                        });
+                                    });
+                                });
+                            });
+                        });
+                    });
+                    break;
+
+                case 'login':
+
+                    if (params.length !== 2) {
+                        return console.log('--help doggo remote login <remoteName> <username|email>');
+                    }
+
+                    Prompt.start();
+
+                    Prompt.get({
+                        properties: {
+                            remotePassword: {
+                                hidden: true,
+                                description: 'Remote password'
+                            }
+                        }
+                    }, (err, promptRes) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+
+                        Db.get('SELECT * FROM Remotes WHERE name = ?', params[0], (err, foundRemote) => {
+
+                            if (err) {
+                                return console.log(err);
+                            }
+
+                            Db.get('SELECT * FROM Users WHERE username = ? OR email = ?', [params[1], params[1]], (err, foundUser) => {
+
+                                if (err) {
+                                    return console.log(err);
+                                }
+
+                                Wreck.post(`${foundRemote.url}/doggo/login`, {
+                                    payload: {
+                                        email: foundUser.email,
+                                        password: promptRes.remotePassword
+                                    }
+                                }, (err, res, loginPayload) => {
+
+                                    if (err) {
+                                        return console.log(err);
+                                    }
+
+                                    if (Buffer.isBuffer(loginPayload)) {
+                                        loginPayload = loginPayload.toString('utf8');
+                                    }
+
+                                    try {
+                                        loginPayload = JSON.parse(loginPayload);
+                                    }
+                                    catch (err) {}
+
+                                    if (loginPayload.error) {
+                                        return console.log(loginPayload);
+                                    }
+
+                                    Db.run('INSERT INTO RemotesUsers(username,remotename) VALUES(?,?)',[
+                                        foundUser.username,
+                                        foundRemote.name
+                                    ], (err) => {
+
+                                        if (err) {
+                                            return console.log(err);
+                                        }
+
+                                        Db.run('UPDATE Users SET jwt = ? WHERE username = ?', [loginPayload, foundUser.username], (err) => {
+
+                                            if (err) {
+                                                return console.log(err);
+                                            }
+                                            console.log(`Success. User ${foundUser.username} logged into remote ${foundRemote.name}`);
+                                        });
+                                    });
+                                });
+                            });
+                        });
+                    });
+                    break;
+
+                case 'rename':
+
+                    if (params.length !== 2) {
+                        return console.log('--help doggo remote rename <old> <new>');
+                    }
+
+                    Db.run('UPDATE Remotes SET name = ? WHERE name = ?', [params[1], params[0]], (err) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+                        return console.log('Success');
+                    });
+                    break;
+
+                case 'remove':
+                case 'delete':
+
+                    if (params.length !== 1) {
+                        return console.log('--help doggo remote remove <name>');
+                    }
+
+                    Db.run('DELETE FROM Remotes WHERE name = ?', params, (err) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+
+                        Db.run('DELETE FROM RemotesUsers WHERE remotename = ? ', params, (err) => {
+
+                            if (err) {
+                                return console.log(err);
+                            }
+
+                            Db.run('UPDATE Settings SET defaultremote = ? WHERE id = ? AND defaultremote = ?', [null, 1, params[0]], (err) => {
+
+                                if (err) {
+                                    return console.log(err);
+                                }
+                                return console.log(`Deleted remote ${params[0]}`);
+                            });
+                        });
+                    });
+                    break;
+
+                default:
+                    console.log('--help');
+                    console.log('   doggo remote list');
+                    console.log('   doggo remote add <name> <url>');
+                    console.log('   doggo remote get-url <name>');
+                    console.log('   doggo remote set-url <name> <url>');
+                    console.log('   doggo remote link-user <remotename> <username|email>');
+                    console.log('   doggo remote rename <old> <new>');
+                    console.log('   doggo remote remove <name>');
+                    break;
+            };
+        });
+    });
+
+Program
+    .command('user <cmd> [params...]')
+    .description('Work with users')
+    .action((cmd, params) => {
+
+        internals.getDb()
+        .then((Db) => {
+
+            switch (cmd) {
+
+                case 'ls':
+
+                    internals.listTable(Db, 'Users');
+                    break;
+
+                case 'add':
+
+                    Prompt.start();
+
+                    Prompt.get({
+                        properties: {
+                            email: {
+                                description: 'Enter Email'
+                            },
+                            username: {
+                                description: 'Enter Username'
+                            },
+                            password: {
+                                hidden: true,
+                                description: 'Create secret key password. Make it good!'
+                            },
+                            confirmPassword: {
+                                hidden: true,
+                                description: 'Confirm password'
+                            }
+                        }
+                    }, (err, promptRes) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+
+                        if (promptRes.password !== promptRes.confirmPassword) {
+                            return console.log('Passwords don\'t match. Try again');
+                        }
+
+                        Db.get('SELECT * FROM Users WHERE username = ?', promptRes.username, (err, row) => {
+
+                            if (err) {
+                                return console.log(err);
+                            }
+                            if (row) {
+                                return console.log(`There is already a user with username: ${promptRes.username}`);
+                            }
+
+                            DoggoNative.genKeys(promptRes.email, promptRes.username, promptRes.password, `Doggo User ${promptRes.username}`)
+                            .then(() => {
+
+                                DoggoNative.getFingerprintFor(`Doggo User ${promptRes.username}`)
+                                .then((fingerprint) => {
+
+                                    DoggoNative.getKey(fingerprint, 'public')
+                                    .then((publicKey) => {
+
+                                        Db.run('INSERT INTO Users(email,username,fingerprint,publicKey,password) VALUES(?,?,?,?,?)', [
+                                            promptRes.email,
+                                            promptRes.username,
+                                            fingerprint,
+                                            publicKey,
+                                            promptRes.password
+                                        ], (err) => {
+
+                                            if (err) {
+                                                return console.log(err);
+                                            }
+
+                                            internals.listTable(Db, 'Users', (err, rows) => {
+
+                                                if (err) {
+                                                    return console.log(err);
+                                                }
+
+                                                if (rows.length === 1) {
+                                                    Db.run('UPDATE Settings SET defaultuser = ? WHERE id = ?', [promptRes.username, 1], (err) => {
+
+                                                        if (err) {
+                                                            return console.log(err);
+                                                        }
+
+                                                        console.log('Default user set to ' + promptRes.username);
+
+                                                        Db.get('SELECT * FROM Settings WHERE id = ?', 1, (err, settings) => {
+
+                                                            if (err) {
+                                                                return console.log(err);
+                                                            }
+                                                            return console.log(`Current settings: ${JSON.stringify(settings, undefined, 4)}`);
+                                                        });
+                                                    });
+                                                }
+                                                else {
+                                                    return console.log('Success');
+                                                }
+                                            });
+                                        });
+                                    })
+                                    .catch(console.log);
+                                })
+                                .catch(console.log);
+                            })
+                            .catch(console.log);
+                        });
+                    });
+                    break;
+
+                case 'set-default':
+
+                    if (params.length !== 1) {
+                        return console.log('--help doggo user set-default <username|email>');
+                    }
+
+                    Db.get('SELECT * FROM Users WHERE username = ? OR email = ?', [params[0], params[0]], (err, row) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+                        if (!row) {
+                            return console.log(`User ${params[0]} not found`);
+                        }
+
+                        Db.run('UPDATE Settings SET defaultuser = ? WHERE id = ?', [row.username, 1], (err) => {
+
+                            if (err) {
+                                return console.log(err);
+                            }
+
+                            console.log('Default user set to ' + row.username);
+
+                            internals.getSettings(Db)
+                            .then((settings) => {
+
+                                return console.log(`Current settings: ${JSON.stringify(settings, undefined, 4)}`);
+                            });
+                        });
+                    });
+                    break;
+
+                case 'remove':
+                case 'delete':
+
+                    if (params.length !== 1) {
+                        return console.log('--help doggo user remove <username|email>');
+                    }
+
+                    Db.get('SELECT * FROM Users WHERE username = ? OR email = ?', [params[0], params[0]], (err, row) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+                        if (!row) {
+                            return console.log(`User ${params[0]} not found`);
+                        }
+
+                        Prompt.start();
+
+                        Prompt.get({
+                            properties: {
+                                areYouSure: {
+                                    description: `\nAre you absolutely sure you want to delete user ${params[0]}?\nYou won't be able to decrypt any secure items associated with this user [yes/no]`
+                                }
+                            }
+                        }, (err, promptRes) => {
+
+                            if (err) {
+                                return console.log(err);
+                            }
+
+                            promptRes.areYouSure = promptRes.areYouSure.toLowerCase();
+
+                            if (promptRes.areYouSure === 'yes' ||
+                                promptRes.areYouSure === 'y') {
+
+                                Db.run('DELETE FROM Users WHERE username = ?', row.username, (err) => {
+
+                                    if (err) {
+                                        return console.log(err);
+                                    }
+
+                                    Db.run('DELETE FROM RemotesUsers WHERE username = ? ', row.username, (err) => {
+
+                                        if (err) {
+                                            return console.log(err);
+                                        }
+
+                                        Db.run('UPDATE Settings SET defaultuser = ? WHERE id = ? AND defaultuser = ?', [null, 1, row.username], (err) => {
+
+                                            if (err) {
+                                                return console.log(err);
+                                            }
+
+                                            DoggoNative.removeAllKeysFor(row.fingerprint)
+                                            .then(() => {
+
+                                                return console.log(`Deleted user ${params[0]}`);
+                                            })
+                                            .catch(console.log);
+                                        });
+                                    });
+                                });
+                            }
+                        });
+                    });
+                    break;
+
+                case 'migrate':
+
+                    //
+                    break;
+
+                default:
+                    console.log('--help');
+                    console.log('doggo user list');
+                    console.log('doggo user add');
+                    console.log('doggo user set-default <name>');
+                    console.log('doggo user remove <name>');
+                    break;
+            };
+        });
+    });
+
+
+Program
+    .command('ls <what> [params...]')
+    .alias('list')
+    .description('List things in Doggo')
+    .action((what, params) => {
+
+        internals.getDb()
+        .then((Db) => {
+
+            switch (what) {
+
+                case 'keys':
+
+                    DoggoNative.listKeysFor(params[0] || null)
+                    .then(console.log)
+                    .catch(console.log);
+
+                    break;
+
+                case 'remote':
+
+                    internals.listTable(Db, 'Remotes');
+                    break;
+
+                case 'user':
+
+                    internals.listTable(Db, 'Users');
+                    break;
+
+                case 'link':
+
+                    internals.listTable(Db, 'RemotesUsers');
+                    break;
+
+                case 'settings':
+
+                    internals.listTable(Db, 'Settings');
+                    break;
+            }
+        });
+    });
+
+internals.getSecureUserRemote = (Db, additionalAsyncActions) => {
+
+    return new Promise((resolve, reject) => {
+
+        internals.getSettings(Db)
+        .then((settings) => {
+
+            let secureUser;
+            let secureRemote;
+            const secureTarget = {};
+            const asyncActions = [];
+
+            if (settings.defaultuser) {
+
+                asyncActions.push((next) => {
+
+                    internals.checkExists(Db, 'Users', 'username', settings.defaultuser)
+                    .then((user) => {
+
+                        if (!user) {
+                            console.log(`User ${settings.defaultuser} not found`);
+                            process.exit(1);
+                        }
+
+                        secureUser = user;
+                        secureTarget.type = 'user';
+                        secureTarget.name = user.username;
+
+                        next();
+                    });
+                });
+            }
+            else {
+
+                asyncActions.push((next) => {
+
+                    Prompt.start();
+                    Prompt.get({
+                        properties: {
+                            username: {
+                                description: 'Which user?'
+                            }
+                        }
+                    },
+                    (err, promptRes) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+
+                        internals.checkExists(Db, 'Users', 'username', promptRes.username)
+                        .then((user) => {
+
+                            if (!user) {
+                                console.log(`User ${promptRes.username} not found`);
+                                process.exit(1);
+                            }
+
+                            secureUser = user;
+                            secureTarget.type = 'user';
+                            secureTarget.name = user.username;
+
+                            next();
+                        });
+                    });
+                });
+            }
+
+            if (settings.defaultremote) {
+
+                asyncActions.push((next) => {
+
+                    internals.checkExists(Db, 'Remotes', 'name', settings.defaultremote)
+                    .then((remote) => {
+
+                        if (!remote) {
+                            console.log(`Remote ${settings.defaultremote} not found`);
+                            process.exit(1);
+                        }
+
+                        secureRemote = remote;
+
+                        next();
+                    });
+                });
+            }
+            else {
+
+                asyncActions.push((next) => {
+
+                    Prompt.start();
+                    Prompt.get({
+                        properties: {
+                            remote: {
+                                description: 'Which remote?'
+                            }
+                        }
+                    },
+                    (err, promptRes) => {
+
+                        if (err) {
+                            console.log(err);
+                            process.exit(1);
+                        }
+
+                        internals.checkExists(Db, 'Remotes', 'name', promptRes.remote)
+                        .then((remote) => {
+
+                            if (!remote) {
+                                return console.log(`Remote ${promptRes.remote} not found`);
+                            }
+
+                            secureRemote = remote;
+                            next();
+                        });
+                    });
+                });
+            }
+
+            Items.serial(asyncActions.concat(additionalAsyncActions), (item, next) => {
+
+                item(next);
+            },
+            (err) => {
+
+                if (err) {
+                    return reject(err);
+                }
+
+                return resolve({
+                    secureUser: secureUser,
+                    secureRemote: secureRemote
+                });
+            });
+        });
+    });
+};
+
+Program
+    .command('secure <cmd> [params...]')
+    .alias('bone')
+    .description('Work with secures')
+    .action((cmd, params) => {
+
+        internals.getDb()
+        .then((Db) => {
+
+            switch (cmd) {
+
+                case 'add':
+                case 'create':
+
+                    if (params.length > 1) {
+                        return console.log('--help doggo secure add <password|file|text> [user|group|organization]');
+                    }
+
+                    const asyncActions = [];
+                    let secureItem = {};
+
+                    const secureType = params[0];
+
+                    switch (secureType) {
+
+                        case 'password':
+
+                            asyncActions.push((next) => {
+
+                                Prompt.start();
+                                Prompt.get({
+                                    properties: {
+                                        generatePassword: {
+                                            description: 'Generate password? [yes/no]'
+                                        }
+                                    }
+                                },
+                                (err, firstPromptRes) => {
+
+                                    if (err) {
+                                        console.log(err);
+                                        process.exit(1);
+                                    }
+
+                                    firstPromptRes.generatePassword = firstPromptRes.generatePassword.toLowerCase();
+
+                                    let promptProps = {
+                                        username: {
+                                            description: 'Enter username associated with this password'
+                                        }
+                                    };
+
+                                    if (!firstPromptRes.generatePassword === 'yes' ||
+                                    !firstPromptRes.generatePassword === 'y') {
+
+                                        promptProps = Object.assign(promptProps, {
+                                            password: {
+                                                hidden: true,
+                                                description: 'Enter password'
+                                            }
+                                        });
+                                    }
+
+                                    promptProps = Object.assign(promptProps, {
+                                        url: {
+                                            description: 'Enter URL (optional)'
+                                        },
+                                        key: {
+                                            description: 'Enter a key to reference this item by'
+                                        },
+                                        description: {
+                                            description: 'Enter description. This will be searchable when finding it later (optional)'
+                                        }
+                                    });
+
+                                    Prompt.start();
+                                    Prompt.get({
+                                        properties: promptProps
+                                    },
+                                    (err, promptRes) => {
+
+                                        if (err) {
+                                            console.log(err);
+                                            process.exit(1);
+                                        }
+
+                                        if (firstPromptRes.generatePassword === 'yes' ||
+                                        firstPromptRes.generatePassword === 'y') {
+                                            secureItem = promptRes;
+                                            secureItem.password = DoggoNative.genPassword();
+                                        }
+                                        else {
+                                            secureItem = promptRes;
+                                        }
+
+                                        next();
+                                    });
+                                });
+                            });
+                            break;
+
+                        case 'file':
+
+                            return console.log('Files not supported yet');
+                            asyncActions.push((next) => {
+
+                                Prompt.start();
+                                Prompt.get({
+                                    properties: {
+                                        filePath: {
+                                            description: 'Enter filepath'
+                                        },
+                                        description: {
+                                            description: 'Enter description. This will be searchable when finding it later (optional)'
+                                        }
+                                    }
+                                },
+                                (err, promptRes) => {
+
+                                    if (err) {
+                                        console.log(err);
+                                        process.exit(1);
+                                    }
+
+                                    secureItem = promptRes;
+
+                                    next();
+                                });
+                            });
+                            break;
+
+                        case 'text':
+
+                            asyncActions.push((next) => {
+
+                                Prompt.get({
+                                    properties: {
+                                        text: {
+                                            description: 'Enter secure text'
+                                        },
+                                        key: {
+                                            description: 'Enter a key to reference this item by'
+                                        },
+                                        description: {
+                                            description: 'Enter description. This will be searchable when finding it later (optional)'
+                                        }
+                                    }
+                                },
+                                (err, promptRes) => {
+
+                                    if (err) {
+                                        console.log(err);
+                                        process.exit(1);
+                                    }
+
+                                    secureItem = promptRes;
+
+                                    next();
+                                });
+                            });
+                            break;
+                    };
+
+                    internals.getSecureUserRemote(Db, asyncActions)
+                    .then((secureResults) => {
+
+                        const secureUser = secureResults.secureUser;
+                        const secureRemote = secureResults.secureRemote;
+
+                        const secureSearchable = {
+                            key: secureItem.key,
+                            description: secureItem.description
+                        };
+
+                        delete secureItem.key;
+                        delete secureItem.description;
+
+                        DoggoNative.encryptTextFor(secureUser.fingerprint, JSON.stringify(secureItem))
+                        .then((encryptedSecureItem) => {
+
+                            const secureRoute = '/doggo/secureItems';
+
+                            const requestPayload = Object.assign({
+
+                                secureItem: encryptedSecureItem,
+                                type: secureType
+                            }, secureSearchable);
+
+                            if (!secureUser.jwt) {
+
+                                console.log('You need to login to the remote');
+
+                                internals.loginUserToRemoteWithObjects(Db, secureRemote, secureUser)
+                                .then((jwt) => {
+
+                                    internals.remoteAuthRequest(
+                                        secureUser,
+                                        secureRemote,
+                                        secureRoute,
+                                        requestPayload
+                                    )
+                                    .then((res) => {
+
+                                        console.log(res.toString('utf8'));
+                                    })
+                                    .catch((err) => {
+
+                                        console.log(err);
+                                    });
+                                });
+                            }
+                            else {
+
+                                internals.remoteAuthRequest(
+                                    secureUser,
+                                    secureRemote,
+                                    secureRoute,
+                                    requestPayload
+                                )
+                                .then((res) => {
+
+                                    console.log(res.toString('utf8'));
+                                })
+                                .catch((err) => {
+
+                                    console.log(err);
+                                });
+                            }
+                        });
+                    })
+                    .catch((err) => {
+
+                        console.log(err);
+                        process.exit(1);
+                    });
+
+                    break;
+
+
+                case 'somethingelse':
+
+                    break;
+            }
+        });
+    });
+
+Program
+    .command('find <searchStr>')
+    .alias('fetch')
+    .description('Find or fetch a resource')
+    .action((searchStr) => {
+
+        internals.getDb()
+        .then((Db) => {
+
+            internals.getSecureUserRemote(Db, [])
+            .then((secureResults) => {
+
+                const secureUser = secureResults.secureUser;
+                const secureRemote = secureResults.secureRemote;
+
+                Wreck.get(`${secureRemote.url}/doggo/users/searchSecure/${searchStr}`, {
+                    headers: {
+                        authorization: secureUser.jwt
+                    }
+                }, (err, res, payload) => {
+
+                    if (err) {
+                        return console.log(err);
+                    }
+
+                    payload = payload.toString('utf8');
+
+                    try {
+                        payload = JSON.parse(payload);
+                    }
+                    catch (err) {};
+
+                    const decryptedSecures = [];
+                    Items.parallel(payload, (item, next) => {
+
+                        DoggoNative.decryptText(secureUser.password, item.secureItem)
+                        .then((decryptedSecure) => {
+
+                            item.secureItem = JSON.parse(decryptedSecure);
+                            decryptedSecures.push(item);
+                            next();
+                        })
+                        .catch(next);
+                    },
+                    (err) => {
+
+                        if (err) {
+                            return console.log(err);
+                        }
+
+                        console.log(decryptedSecures);
+                    });
+                });
+            });
+        });
+    });
+
+// Below is just a cli interface to Doggo's nativeGpgUtils
+
+Program
+    .command('getFingerprintFor <keyIdentifier>')
+    .description('Get fingerprint for user identified by "key identifier"')
+    .action((keyIdentifier) => {
+
+        DoggoNative.getFingerprintFor(keyIdentifier)
+        .then(console.log)
+        .catch(console.log);
+    });
+
+Program
+    .command('genKeys')
+    .description('Generate keys for a new user')
+    .action(() => {
+
+        Prompt.start();
+
+        Prompt.get({
+            properties: {
+                email: {
+                    description: 'Enter Email'
+                },
+                username: {
+                    description: 'Enter Username'
+                },
+                password: {
+                    hidden: true,
+                    description: 'Create secret key password. Make it good!'
+                },
+                confirmPassword: {
+                    hidden: true,
+                    description: 'Confirm password'
+                }
+            }
+        }, (err, promptRes) => {
+
+            if (err) {
+                return console.log(err);
+            }
+
+            if (promptRes.password !== promptRes.confirmPassword) {
+                return console.log('Passwords don\'t match. Try again');
+            }
+
+            DoggoNative.genKeys(promptRes.email, promptRes.username, promptRes.password, `Doggo User ${promptRes.username}`)
+            .then(console.log)
+            .catch(console.log);
+        });
+    });
+
+Program
+    .command('deleteKeyFor <fingerprint> <keyType>')
+    .alias('removeKeyFor')
+    .description('Delete a key for user (use fingerprint)')
+    .action((fingerprint, keyType) => {
+
+        DoggoNative.deleteKeyFor(fingerprint, keyType)
+        .then(console.log)
+        .catch(console.log);
+    });
+
+Program
+    .command('deleteAllKeysFor <fingerprint>')
+    .alias('removeAllKeysFor')
+    .description('Delete all keys for a user (use fingerprint)')
+    .action((fingerprint, keyType) => {
+
+        DoggoNative.deleteAllKeysFor(fingerprint)
+        .then(console.log)
+        .catch(console.log);
+    });
+
+Program
+    .command('importKey <keyPath>')
+    .description('Import a key')
+    .action((keyPath) => {
+
+        DoggoNative.importKey(keyPath)
+        .then(console.log)
+        .catch(console.log);
+    });
+
+Program
+    .command('exportKey <fingerprint> <keyType> <keySavePath>')
+    .description('Export a "secret" or "public" key for user (use fingerprint)')
+    .action((fingerprint, keyType, keySavePath) => {
+
+        DoggoNative.exportKey(fingerprint, keyType, keySavePath)
+        .then(console.log)
+        .catch(console.log);
+    });
+
+Program
+    .command('listKeys')
+    .alias('keys')
+    .description('List all keys')
+    .action((keyIdentifier) => {
+
+        DoggoNative.listKeys()
+        .then(console.log)
+        .catch(console.log);
+    });
+
+Program
+    .command('listKeysFor <keyIdentifier>')
+    .description('Check if key exists or list keys for given key identifier')
+    .action((keyIdentifier) => {
+
+        DoggoNative.listKeysFor(keyIdentifier)
+        .then(console.log)
+        .catch(console.log);
+    });
+
+Program
+    .command('encryptFor <fingerprint> <srcFile> <destFile>')
+    .description('Encrypt a file for user (use fingerprint)')
+    .action((fingerprint, srcFile, destFile) => {
+
+        DoggoNative.encryptFor(fingerprint, srcFile, destFile)
+        .then(console.log)
+        .catch(console.log);
+    });
+
+Program
+    .command('encryptText <text>')
+    .description('Encrypt a string of text with a password')
+    .action((text) => {
+
+        Prompt.get({
+            properties: {
+                encryptPassword: {
+                    hidden: true,
+                    description: 'Encryption password'
+                }
+            }
+        }, (err, promptRes) => {
+
+            if (err) {
+                return console.log(err);
+            }
+
+            DoggoNative.encryptText(promptRes.encryptPassword, text)
+            .then(console.log)
+            .catch(console.log);
+        });
+    });
+
+Program
+    .command('encryptTextToFile <text> <fileName>')
+    .description('Encrypt a string of text into a file with a password')
+    .action((text, fileName) => {
+
+        Prompt.get({
+            properties: {
+                encryptPassword: {
+                    hidden: true,
+                    description: 'Encryption password'
+                }
+            }
+        }, (err, promptRes) => {
+
+            if (err) {
+                return console.log(err);
+            }
+
+            Fs.writeFileSync(fileName, text);
+            const filePath = `${process.cwd()}/${fileName}`;
+
+            DoggoNative.passwordEncryptFile(promptRes.encryptPassword, filePath)
+            .then(console.log)
+            .catch(console.log);
+        });
+    });
+
+Program
+    .command('encryptTextFor <fingerprint> <text>')
+    .description('Encrypt text for user (use fingerprint)')
+    .action((fingerprint, text) => {
+
+        DoggoNative.encryptTextFor(fingerprint, text)
+        .then(console.log)
+        .catch(console.log);
+    });
+
+Program
+    .command('decryptFile <filePath>')
+    .description('Decrypt a file with a password')
+    .action((filePath) => {
+
+        Prompt.start();
+        Prompt.get({
+            properties: {
+                decryptPassword: {
+                    hidden: true,
+                    description: 'Decrypt password'
+                }
+            }
+        }, (err, promptRes) => {
+
+            if (err) {
+                return console.log(err);
+            }
+
+            DoggoNative.decryptFile(promptRes.decryptPassword, `${process.cwd()}/${filePath}`)
+            .then(console.log)
+            .catch(console.log);
+        });
+    });
+
+Program
+    .command('getDecryptedFileContents <filePath>')
+    .description('Decrypt a file with a password')
+    .action((filePath) => {
+
+        Prompt.start();
+        Prompt.get({
+            properties: {
+                decryptPassword: {
+                    hidden: true,
+                    description: 'Decrypt password'
+                }
+            }
+        }, (err, promptRes) => {
+
+            if (err) {
+                return console.log(err);
+            }
+
+            DoggoNative.getDecryptedFileContents(promptRes.decryptPassword, `${process.cwd()}/${filePath}`)
+            .then(console.log)
+            .catch(console.log);
+        });
+    });
+
+Program
+    .command('genPassword')
+    .description('Generate a password')
+    .action(() => {
+
+        console.log(DoggoNative.genPassword());
+    });
+
+Program
+    .command('*')
+    .action(() => {
+
+        Program.help();
+    });
+
+if (!process.argv.slice(2).length) {
+    Program.help();
+}
+
+Program.parse(process.argv);
