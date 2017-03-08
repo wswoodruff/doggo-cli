@@ -1185,14 +1185,17 @@ Program
                                     }
 
                                     promptProps = Object.assign(promptProps, {
-                                        url: {
-                                            description: 'Enter URL (optional)'
-                                        },
                                         key: {
                                             description: 'Enter a key to reference this item by'
                                         },
+                                        url: {
+                                            description: 'Enter URL (optional)'
+                                        },
                                         description: {
                                             description: 'Enter description. This will be searchable when finding it later (optional)'
+                                        },
+                                        extras: {
+                                            extras: 'Enter any extra info here like security questions if you\'d like (optional)'
                                         }
                                     });
 
@@ -1233,8 +1236,14 @@ Program
                                         filePath: {
                                             description: 'Enter filepath'
                                         },
+                                        key: {
+                                            description: 'Enter a key to reference this item by'
+                                        },
                                         description: {
                                             description: 'Enter description. This will be searchable when finding it later (optional)'
+                                        },
+                                        extras: {
+                                            extras: 'Enter any extra info here like security questions if you\'d like (optional)'
                                         }
                                     }
                                 },
@@ -1266,6 +1275,9 @@ Program
                                         },
                                         description: {
                                             description: 'Enter description. This will be searchable when finding it later (optional)'
+                                        },
+                                        extras: {
+                                            extras: 'Enter any extra info here like security questions if you\'d like (optional)'
                                         }
                                     }
                                 },
