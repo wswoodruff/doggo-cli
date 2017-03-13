@@ -26,6 +26,7 @@
     "minify": "^1.4.10",
     "prompt": "^1.0.0",
     "sqlite3": "^3.1.8",
+    "uuid": "^3.0.1",
     "wreck": "^10.0.0"
   },
   "devDependencies": {}
