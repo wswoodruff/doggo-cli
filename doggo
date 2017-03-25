@@ -43,15 +43,6 @@ if(!Fs.existsSync(dbPath)) {
 const dbUtils = require('./lib/doggo-cli-db')(Program, DoggoNative);
 const db = dbUtils.db;
 
-// db.raw('PRAGMA table_info(Users)')
-// .then((res) => {
-
-//     console.log(res);
-//     db.destroy();
-// })
-
-// return;
-
 const internals = {};
 
 Program
