@@ -61,6 +61,8 @@ require('./lib/doggo-cli-db')(Program, DoggoNative);
 require('./lib/doggo-cli-utils')(Program, DoggoNative);
 require('./lib/doggo-cli-user')(Program, DoggoNative);
 require('./lib/doggo-cli-remote')(Program, DoggoNative);
+require('./lib/doggo-cli-group')(Program, DoggoNative);
+// require('./lib/doggo-cli-organization')(Program, DoggoNative);
 require('./lib/doggo-cli-secure')(Program, DoggoNative);
 require('./lib/doggo-cli-gpg')(Program, DoggoNative);
 require('./lib/doggo-cli-find')(Program, DoggoNative);
