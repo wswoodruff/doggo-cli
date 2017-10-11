@@ -6,7 +6,9 @@
     "doggo": "./doggo"
   },
   "scripts": {
-    "dev": "echo Yoo"
+    "dev": "echo Yoo",
+    "snyk-protect": "snyk protect",
+    "prepublish": "npm run snyk-protect"
   },
   "repository": {
     "type": "git",
@@ -29,7 +31,9 @@
     "prompt": "^1.0.0",
     "sqlite3": "^3.1.8",
     "uuid": "^3.0.1",
-    "wreck": "^12.4.0"
+    "wreck": "^12.4.0",
+    "snyk": "^1.42.6"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "snyk": true
 }
