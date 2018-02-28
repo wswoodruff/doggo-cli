@@ -5,7 +5,6 @@
 const Program = require('commander');
 const Fs = require('fs');
 const Spawn = require('child_process').spawn;
-const Knex = require('knex');
 const DoggoNative = require('doggo')('native');
 
 const dbPath = `${__dirname}/lib/doggo.sqlite`;
@@ -15,7 +14,7 @@ if(!Fs.existsSync(dbPath)) {
 
     Fs.writeFileSync(dbPath, '');
 
-    const dbUtils = require('./lib/doggo-cli-db')(Program, DoggoNative);
+    const dbUtils = require('./lib/db')(Program, DoggoNative);
     const db = dbUtils.db;
 
     db.migrate.latest()
@@ -40,7 +39,7 @@ if(!Fs.existsSync(dbPath)) {
     return;
 };
 
-const dbUtils = require('./lib/doggo-cli-db')(Program, DoggoNative);
+const dbUtils = require('./lib/db')(Program, DoggoNative);
 const db = dbUtils.db;
 
 const internals = {};
@@ -54,19 +53,19 @@ Program
     .description('Gimme Doggo memes!')
     .action(() => {
 
-        Spawn('open', ['https://www.facebook.com/pg/borkINC/posts']);
+        Spawn('open', ['https://www.facebook.com/diabeticDoggos']);
     });
 
-require('./lib/doggo-cli-db')(Program, DoggoNative);
-require('./lib/doggo-cli-utils')(Program, DoggoNative);
-require('./lib/doggo-cli-user')(Program, DoggoNative);
-require('./lib/doggo-cli-remote')(Program, DoggoNative);
-require('./lib/doggo-cli-group')(Program, DoggoNative);
+require('./lib/db')(Program, DoggoNative);
+require('./lib/utils')(Program, DoggoNative);
+require('./lib/user')(Program, DoggoNative);
+require('./lib/remote')(Program, DoggoNative);
+require('./lib/group')(Program, DoggoNative);
 // require('./lib/doggo-cli-organization')(Program, DoggoNative);
-require('./lib/doggo-cli-secure')(Program, DoggoNative);
-require('./lib/doggo-cli-gpg')(Program, DoggoNative);
-require('./lib/doggo-cli-find')(Program, DoggoNative);
-require('./lib/doggo-cli-client')(Program, DoggoNative);
+require('./lib/secure')(Program, DoggoNative);
+require('./lib/gpg')(Program, DoggoNative);
+require('./lib/find')(Program, DoggoNative);
+require('./lib/client')(Program, DoggoNative);
 
 Program
     .command('*')
