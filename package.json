@@ -3,7 +3,7 @@
   "version": "0.0.3",
   "description": "A cli interface to doggo",
   "bin": {
-    "hpal": "./bin/doggo"
+    "doggo": "./bin/doggo"
   },
   "scripts": {},
   "repository": {
