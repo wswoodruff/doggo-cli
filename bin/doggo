@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+
+const DoggoCli = require('../lib');
+const DisplayError = require('../lib/display-error');
+
+Promise.resolve({
+    argv: process.argv,
+    in: process.stdin,
+    out: process.stdout,
+    err: process.stderr,
+    cwd: process.cwd(),
+    colors: !!require('supports-color').stdout
+})
+    .then(DoggoCli.start)
+    .then(() => process.exit(0))
+    .catch((err) => {
+
+        if (err instanceof DisplayError) {
+            console.error(err.message);
+        }
+        else {
+            console.error(err.stack);
+        }
+
+        process.exit(1);
+    });
