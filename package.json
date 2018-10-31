@@ -20,13 +20,14 @@
     "commander": "^2.9.0",
     "cryptiles": "^4.1.2",
     "doggo": "0.0.2",
-    "doggo-adapter-gpg": "0.0.2",
+    "doggo-adapter-gpg": "0.0.3",
     "gulp": "^3.8.11",
     "hapi": "^8.8.1",
     "hoek": "^4.1.0",
     "marked": "^0.5.1",
     "marked-terminal": "^3.1.1",
     "minify": "^1.4.10",
+    "tmp-promise": "^1.0.5",
     "uuid": "^3.0.1"
   },
   "devDependencies": {}
