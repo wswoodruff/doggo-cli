@@ -1,5 +1,5 @@
 # doggo-cli
-A cli interface to doggo and doggo-dish
+A cli interface to doggo
 
 ### Warning: This project is not guaranteed to be secure and should not be fully trusted as such.
 Until this project goes through an official security audit by a known, trusted company, do not trust that it will keep your passwords and secure items safe.
