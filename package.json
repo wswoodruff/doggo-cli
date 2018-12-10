@@ -21,7 +21,7 @@
     "cryptiles": "^4.1.2",
     "doggo": "0.0.2",
     "doggo-adapter-gpg": "0.0.3",
-    "gulp": "^3.8.11",
+    "gulp": "^4.0.0",
     "hapi": "^8.8.1",
     "hoek": "^4.1.0",
     "marked": "^0.5.1",
