@@ -1,0 +1,10 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.13.1
+ignore: {}
+# patches apply the minimum changes required to fix a vulnerability
+patch:
+  'npm:lodash:20180130':
+    - doggo-adapter-gpg > npm > npm-audit-report > cli-table2 > lodash:
+        patched: '2018-12-12T06:09:17.686Z'
+    - doggo > doggo-core > npm > npm-audit-report > cli-table2 > lodash:
+        patched: '2018-12-12T06:09:17.686Z'

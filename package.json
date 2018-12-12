@@ -5,7 +5,10 @@
   "bin": {
     "doggo": "./bin/doggo"
   },
-  "scripts": {},
+  "scripts": {
+    "snyk-protect": "snyk protect",
+    "prepare": "npm run snyk-protect"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/WilliamSWoodruff/doggo-cli"
@@ -28,7 +31,9 @@
     "marked-terminal": "^3.1.1",
     "minify": "^1.4.10",
     "tmp-promise": "^1.0.5",
-    "uuid": "^3.0.1"
+    "uuid": "^3.0.1",
+    "snyk": "^1.117.1"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "snyk": true
 }
