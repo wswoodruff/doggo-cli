@@ -24,7 +24,7 @@
     "gulp": "^3.8.11",
     "hapi": "^8.8.1",
     "hoek": "^4.1.0",
-    "marked": "^0.5.1",
+    "marked": "^0.6.0",
     "marked-terminal": "^3.1.1",
     "minify": "^1.4.10",
     "tmp-promise": "^1.0.5",
