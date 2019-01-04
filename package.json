@@ -16,19 +16,15 @@
     "url": "https://github.com/WilliamSWoodruff/doggo-cli/issues"
   },
   "dependencies": {
-    "bossy": "^4.0.1",
-    "commander": "^2.9.0",
-    "cryptiles": "^4.1.2",
-    "doggo": "0.0.3",
-    "doggo-adapter-gpg": "0.0.3",
+    "bossy": "4.x.x",
+    "commander": "2.x.x",
+    "doggo": "0.x.x",
+    "doggo-adapter-gpg": "0.x.x",
     "gulp": "^3.8.11",
-    "hapi": "^8.8.1",
     "hoek": "^4.1.0",
     "marked": "^0.5.1",
     "marked-terminal": "^3.1.1",
-    "minify": "^1.4.10",
-    "tmp-promise": "^1.0.5",
-    "uuid": "^3.0.1"
+    "tmp-promise": "^1.0.5"
   },
   "devDependencies": {}
 }
