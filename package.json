@@ -24,10 +24,10 @@
     "bounce": "^1.2.3",
     "doggo": "0.x.x",
     "doggo-adapter-gpg": "0.x.x",
+    "enquirer": "^2.3.0",
     "fs": "0.0.1-security",
     "gulp": "^3.8.11",
     "hoek": "^4.1.0",
-    "inquirer": "^6.2.1",
     "tmp-promise": "^1.0.5",
     "toys": "^2.2.1"
   },
