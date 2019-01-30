@@ -26,6 +26,7 @@
     "doggo-adapter-gpg": "0.x.x",
     "enquirer": "^2.3.0",
     "fs": "0.0.1-security",
+    "fuse.js": "^3.3.0",
     "gulp": "^3.8.11",
     "hoek": "^4.1.0",
     "tmp-promise": "^1.0.5",
