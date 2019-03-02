@@ -5,10 +5,15 @@
   "bin": {
     "doggo": "./bin/doggo"
   },
-  "scripts": {},
+  "scripts": {
+    "lint": "eslint lib"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/WilliamSWoodruff/doggo-cli"
+  },
+  "engines": {
+    "node": "9.5.0"
   },
   "author": "William Woodruff <williamswoodruff@gmail.com>",
   "license": "MIT",
@@ -16,15 +21,22 @@
     "url": "https://github.com/WilliamSWoodruff/doggo-cli/issues"
   },
   "dependencies": {
+    "automerge": "^0.9.2",
     "bossy": "4.x.x",
-    "commander": "2.x.x",
+    "bounce": "^1.2.3",
     "doggo": "0.x.x",
-    "doggo-adapter-gpg": "0.x.x",
-    "gulp": "^3.8.11",
+    "doggo-adapter-gpg": "^0.1.0",
+    "enquirer": "^2.3.0",
+    "fs": "0.0.1-security",
+    "fuse.js": "^3.3.0",
     "hoek": "^4.1.0",
-    "marked": "^0.5.1",
-    "marked-terminal": "^3.1.1",
-    "tmp-promise": "^1.0.5"
+    "tmp-promise": "^1.0.5",
+    "toys": "^2.2.1"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "eslint": "^5.15.0",
+    "eslint-config-hapi": "^12.0.0",
+    "eslint-plugin-hapi": "^4.1.0",
+    "gulp": "^3.8.11"
+  }
 }
