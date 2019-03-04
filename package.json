@@ -25,7 +25,7 @@
     "bossy": "4.x.x",
     "bounce": "^1.2.3",
     "doggo": "0.x.x",
-    "doggo-adapter-gpg": "^0.1.0",
+    "doggo-adapter-gpg": "^0.2.0",
     "enquirer": "^2.3.0",
     "fs": "0.0.1-security",
     "fuse.js": "^3.3.0",
