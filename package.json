@@ -31,7 +31,7 @@
     "hoek": "4.x.x",
     "mkdirp": "0.x.x",
     "tmp-promise": "1.x.x",
-    "toys": "2.x.x"
+    "toys": "^2.2.2"
   },
   "devDependencies": {
     "eslint": "5.x.x",
