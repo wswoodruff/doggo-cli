@@ -26,7 +26,7 @@
     "bounce": "1.x.x",
     "bourne": "^1.1.2",
     "doggo": "^0.1.0",
-    "doggo-adapter-gpg": "^0.3.2",
+    "doggo-adapter-gpg": "^0.4.1",
     "dotenv": "^7.0.0",
     "enquirer": "2.x.x",
     "fuse.js": "3.x.x",
