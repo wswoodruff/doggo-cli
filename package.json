@@ -6,7 +6,9 @@
     "doggo": "./bin/doggo"
   },
   "scripts": {
-    "lint": "eslint lib"
+    "lint": "eslint lib",
+    "snyk-protect": "snyk protect",
+    "prepare": "npm run snyk-protect"
   },
   "repository": {
     "type": "git",
@@ -34,11 +36,13 @@
     "mkdirp": "0.x.x",
     "tmp-promise": "1.x.x",
     "toys": "2.x.x",
-    "wreck": "14.x.x"
+    "wreck": "14.x.x",
+    "snyk": "^1.189.0"
   },
   "devDependencies": {
     "eslint": "5.x.x",
     "eslint-config-hapi": "12.x.x",
     "eslint-plugin-hapi": "4.x.x"
-  }
+  },
+  "snyk": true
 }
