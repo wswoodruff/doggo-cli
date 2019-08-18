@@ -27,7 +27,7 @@
     "bourne": "^1.1.2",
     "doggo": "^0.1.0",
     "doggo-adapter-gpg": "^0.4.1",
-    "dotenv": "^7.0.0",
+    "dotenv": "^8.1.0",
     "enquirer": "2.x.x",
     "fuse.js": "3.x.x",
     "hoek": "4.x.x",
