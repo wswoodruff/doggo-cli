@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+'use strict';
 
 const DoggoCli = require('../lib');
 const DisplayError = require('../lib/display-error');
