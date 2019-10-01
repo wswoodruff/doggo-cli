@@ -37,7 +37,7 @@
     "wreck": "14.x.x"
   },
   "devDependencies": {
-    "eslint": "5.x.x",
+    "eslint": "^6.5.1",
     "eslint-config-hapi": "12.x.x",
     "eslint-plugin-hapi": "4.x.x"
   }
