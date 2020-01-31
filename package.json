@@ -33,7 +33,7 @@
     "hoek": "4.x.x",
     "mkdirp": "0.x.x",
     "tmp-promise": "1.x.x",
-    "toys": "2.x.x",
+    "toys": "^2.3.1",
     "wreck": "14.x.x"
   },
   "devDependencies": {
