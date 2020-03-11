@@ -31,7 +31,7 @@
     "enquirer": "2.x.x",
     "fuse.js": "3.x.x",
     "hoek": "4.x.x",
-    "mkdirp": "0.x.x",
+    "mkdirp": "1.0.0",
     "tmp-promise": "1.x.x",
     "toys": "2.x.x",
     "wreck": "14.x.x"
