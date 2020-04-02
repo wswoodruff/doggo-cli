@@ -29,7 +29,7 @@
     "doggo-adapter-gpg": "^0.5.2",
     "dotenv": "^7.0.0",
     "enquirer": "2.x.x",
-    "fuse.js": "3.x.x",
+    "fuse.js": "^5.1.0",
     "hoek": "4.x.x",
     "mkdirp": "0.x.x",
     "tmp-promise": "1.x.x",
