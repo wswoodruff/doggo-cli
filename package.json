@@ -21,7 +21,7 @@
     "url": "https://github.com/WilliamSWoodruff/doggo-cli/issues"
   },
   "dependencies": {
-    "automerge": "0.x.x",
+    "automerge": "^0.14.1",
     "bossy": "4.x.x",
     "bounce": "1.x.x",
     "bourne": "^1.1.2",
